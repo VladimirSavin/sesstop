@@ -18,7 +18,7 @@ v_timestamp=`date +%s`
 
 echo_usage() {
 	printf "%s\n" "Usage:
-`basename $0` [options] 
+`basename $0` [options]
 
 Options:
  -l	--list	[class]		show list of statistics in class
@@ -26,7 +26,7 @@ Options:
  -i	--id	<stat id>	run top on stat id number with default parameters (10 elements and 20 seconds delay)
  -d --delay [number]    delay information update delay [default 20 sec]
  -t --top-size			display number of top elements [default 10]
- 
+
  -h     --help                  display this help and exit
 
 Statistics classes:
@@ -73,6 +73,19 @@ exit;
 EoOS
 }
 
+stats_name() {
+	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
+set echo off
+set head off
+set feedback off
+set linesize 180
+set pagesize 0
+column name format a70
+select statistic#, name from sys.v_\$statname where statistic#=${ID} ;
+exit;
+EoOS
+}
+
 output() {
  local v_msg=$1
  local v_datetime=`date +%Y.%m.%d:%H.%M.%S | tr -d [:cntrl:]`
@@ -82,9 +95,9 @@ output() {
 # Check the script is already working. Uncomment this if lock_file need.
 #if [ -f "$LOCK_FILE" ]
 #then
-#	v_lock=`cat $LOCK_FILE` 
+#	v_lock=`cat $LOCK_FILE`
 #	output "Another process(${v_lock}) with the script is already working"
-#	output "If script did not launch please delete lock file: $LOCK_FILE" 
+#	output "If script did not launch please delete lock file: $LOCK_FILE"
 #exit -1;
 #fi
 
@@ -116,12 +129,11 @@ fi
 create_sqlite_db_table() {
 "$SQLITE" "$SQLITE_DB" << __EOF__
 create table if not exists sesstop (timestamp integer, sid integer, statvalue integer);
-.schema
 .exit
 __EOF__
 }
 
-# Drop table in sqlite 
+# Drop table in sqlite
 drop_sqlite_db_table() {
 "$SQLITE" "$SQLITE_DB" << __EOF__
 drop table if exists sesstop;
@@ -129,7 +141,7 @@ drop table if exists sesstop;
 __EOF__
 }
 
-# Import data from ${TMP_FILE} to sqlite db ($SQLITE_DB). 
+# Import data from ${TMP_FILE} to sqlite db ($SQLITE_DB).
 import_data() {
 "$SQLITE" "$SQLITE_DB" << __EOF__
 .mode csv
@@ -140,11 +152,11 @@ __EOF__
 
 
 
-# Validate import from ${TMP_FILE} to sqlite db ($SQLITE_DB). 
+# Validate import from ${TMP_FILE} to sqlite db ($SQLITE_DB).
 validate_import() {
 v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`
 v_y=`cat ${TMP_FILE} | wc -l`
-[ "$v_x" -eq "$v_y" ] && ( echo "Validate OK";return 0 ) || ( echo "Validate ERROR"; return 1 );
+[ "$v_x" -eq "$v_y" ] && ( return 0 ) || ( echo "Validate ERROR"; return 1 );
 }
 
 
@@ -157,11 +169,11 @@ set head off
 set feedback off
 set newp none
 set pagesize 0
-select ${v_timestamp}||','||st.sid||','||st.value 
-from v\$sesstat st, v\$statname sn 
-where st.STATISTIC#=sn.STATISTIC# 
+select ${v_timestamp}||','||st.sid||','||st.value
+from v\$sesstat st, v\$statname sn
+where st.STATISTIC#=sn.STATISTIC#
   and sn.STATISTIC#='${ID}'
-  and st.value is not null 
+  and st.value is not null
   and st.value>0;
 exit
 __EOF__
@@ -184,7 +196,7 @@ then
 	exit 1
 fi
 
-# Source parameters 
+# Source parameters
 if [ -f /etc/profile.d/ora_env.sh ]
 then
 	source /etc/profile.d/ora_env.sh
@@ -221,7 +233,7 @@ do
 					"Enqueue")
 						CLASS=4
 					;;
-						
+
 					"Cache")
 						CLASS=8
 					;;
@@ -250,28 +262,27 @@ do
 			if [[ ! "$2" =~ ^- ]]
 			then
 				STAT_NAME=$2
-			fi	
+			fi
 			find_stat
 			exit 0
 		;;
 		"-i"|"--id")
 			if [ -z $2 ]
 			then
-				# думаю что на самом деле, можно и без статы вызывать это дело, просто топ сессий; но пока так
-				printf "%s\n" "You did not choose on statistic ID. Не указан id необходимой статистики" 
+				printf "%s\n" "You did not choose on statistic ID."
 				exit 1
 			fi
 			ID=$2
-			printf "%s\n" "Вы выбрали statistic# #${ID}. You want to see top on statistic #${ID}. Sorry, this mode is under construction"
+			printf "%s\n" " You want to see top on statistic #${ID}."
 			shift 2
 		;;
 		"-d"|"--delay")
 			if  [[ ! "$2" =~ ^- ]] && [[ ! -z "$2" ]]
 			then
 				DELAY=$2
-				printf "%s\n" "DELAY is set to #${DELAY}. Sorry, this mode is under construction"
+				printf "%s\n" "DELAY is set to ${DELAY} second[s]."
 			else
-				printf "%s\n" "You did not choose on DELAY. Параметр DELAY не установлен" 
+				printf "%s\n" "You did not choose on DELAY."
 				exit 1
 			fi
 			shift 2
@@ -279,11 +290,11 @@ do
 		"-t"|"--top_size")
 			if [ -z $2 ]
 			then
-				printf "%s\n" "You did not choose on TOP_SIZE. Параметр TOP_SIZE не установлен." 
+				printf "%s\n" "You did not choose on TOP_SIZE."
 				exit 1
 			fi
 			TOP_SIZE=$2
-			printf "%s\n" "TOP_SIZE is set to #${TOP_SIZE}. Sorry, this mode is under construction"
+			printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."
 			shift 2
 		;;
 		*) echo "$1 is not an option"
@@ -297,42 +308,48 @@ check_dirs;
 check_sqlite;
 create_sqlite_db_table;
 
-trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT
+trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT EXIT SIGKILL
 
-while true 
-do
-v_timestamp=`date +%s`
-begin_timestamp=${end_timestamp:-0}
-end_timestamp=${v_timestamp}
-create_dbf_with_data
-import_data
-validate_import
-sleep $DELAY
-tput clear;tput sc; tput cup 5 5 ;tput bold
-"$SQLITE" "$SQLITE_DB" << __EOF__
+while true
+	do
+	v_timestamp=`date +%s`
+	begin_timestamp=${end_timestamp:-0}
+	end_timestamp=${v_timestamp}
+	create_dbf_with_data
+	import_data
+	validate_import
+	sleep $DELAY
+	tput clear
+
+ 		tput sc; tput cup 1 5 ;
+		tput smul; stats_name;tput rmul; date; hostname -f
+		tput rmul; tput rc
+
+		tput sc; tput cup 5 5 ;
+		"$SQLITE" "$SQLITE_DB" << __EOF__
 .header on
 .mode column
-select sid, end_value-begin_value as delta
-from (
-select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value
-from (select sid, statvalue from sesstop where timestamp=${end_timestamp}) e
-left join
+		select sid, end_value-begin_value as delta
+		from (
+			select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value
+			from (select sid, statvalue from sesstop where timestamp=${end_timestamp}) e
+			left join
      (select sid, statvalue from sesstop where timestamp=${begin_timestamp}) b
-on b.sid=e.sid )
-where (end_value-begin_value)>0
-order by delta desc
-LIMIT ${TOP_SIZE};
+		 on b.sid=e.sid )
+		 where (end_value-begin_value)>0
+		 order by delta desc
+		 LIMIT ${TOP_SIZE};
 __EOF__
 done
-tput rc; tput rmul; tput clear
+	tput rc; tput clear
 
 
-# TODO: вот тут должна быть обработка статистики
+# TODO:
 
 #1 убрать лишний вывод в консоль. оставить только диагностические сообщения с определенным параметром
-#2 убрать именованные параметры: 
+#2 убрать именованные параметры:
 #####использовать 3 параметра (причем 2 и 3 сделать не обязательными)
-#####значения delay и top-size при отсутсвии параметров использовать значение по умолчанию 
+#####значения delay и top-size при отсутсвии параметров использовать значение по умолчанию
 #####Первый параметр если число, то сразу выводим работу скрипта по данной метрике
 ##### Если слово заглавными буквами содержащее класс события то список событий этого класса и подходит под один из 8 классов иначе использовать поиск параметра
 ##### если слово но маленькими буквами выводить список грепнутых параметров по этому слову
@@ -341,4 +358,3 @@ tput rc; tput rmul; tput clear
 #5 добавить удаление БД для статистики event и каталога для sqlite
 #6 добавить проверку наличия sqlplus и установленных переменных
 #7 добавить удаление временного файла для импорта и удаление файла данных sqlite db
-
