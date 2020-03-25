@@ -47,6 +47,7 @@ DELAY=${DELAY:-20}
 TOP_SIZE=$((`tput lines` - 8 ))
 v_timestamp=`date +%s`
 SCREEN_SIZE_LINES=$((`tput lines` - 1))
+original_tty_state=$(stty -g)
 # === ===
 
 ###############################################################
@@ -150,6 +151,7 @@ data_purge(){
 	rm -f ${SQLITE_DB}
 	rm -Rf ${TMP_DIR}
 #	echo "Data purge"
+	stty ${original_tty_state}
 	tput reset
 	exit 0
 }
