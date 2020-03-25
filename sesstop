@@ -44,8 +44,9 @@ TMP_FILE=${TMP_DIR}"/temp.dat"
 SQLITE="/usr/bin/sqlite3"
 SQLITE_DB=${TMP_DIR}"/sesstop_$$.dbf"
 DELAY=${DELAY:-20}
-TOP_SIZE=$((`tput lines` - 7 ))
+TOP_SIZE=$((`tput lines` - 8 ))
 v_timestamp=`date +%s`
+SCREEN_SIZE_LINES=$((`tput lines` - 1))
 # === ===
 
 ###############################################################
@@ -147,7 +148,9 @@ check_command() {
 data_purge(){
 	rm -f ${TMP_FILE}
 	rm -f ${SQLITE_DB}
-	echo "Data purge"
+	rm -Rf ${TMP_DIR}
+#	echo "Data purge"
+	tput reset
 	exit 0
 }
 
@@ -229,13 +232,15 @@ EoOS
 
 oracle_export_stats_data(){
 	v_timestamp=`date +%s`
-	$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
+	if [ -n "${ID}" ]
+	then
+		$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
 whenever sqlerror exit failure
 set head off
 set feedback off
 set newp none
 set pagesize 0
-select ${v_timestamp}||','||st.sid||','||st.value
+select ${v_timestamp}||','||st.sid||','||st.value||','||sn.name
 from v\$sesstat st, v\$statname sn
 where st.STATISTIC#=sn.STATISTIC#
   and sn.STATISTIC#='${ID}'
@@ -243,6 +248,21 @@ where st.STATISTIC#=sn.STATISTIC#
   and st.value>0;
 exit
 __EOF__
+	else
+	        $ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
+whenever sqlerror exit failure
+set head off
+set feedback off
+set newp none
+set pagesize 0
+select ${v_timestamp}||','||st.sid||','||st.value||','||sn.name
+from v\$sesstat st, v\$statname sn
+where st.STATISTIC#=sn.STATISTIC#
+  and st.value is not null
+  and st.value>0;
+exit
+__EOF__
+	fi
 }
 ###############################################################
 #
@@ -262,7 +282,7 @@ __EOF__
 sqlite_create_table() {
 	"$SQLITE" "$SQLITE_DB" << __EOF__
 drop table if exists sesstop;
-create table sesstop (timestamp integer, sid integer, statvalue integer);
+create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));
 .exit
 __EOF__
 }
@@ -299,11 +319,11 @@ sqlite_validate_import() {
 ###############################################################
 
 
-if [ -z $1 ] #Запуск без параметров выводит echo_usage
-then
-	echo_usage
-	exit 1
-fi
+#if [ -z $1 ] #Запуск без параметров выводит echo_usage
+#then
+#	echo_usage
+#	exit 1
+#fi
 
 # no need to source because you run script as oracle user
 # Source parameters
@@ -433,27 +453,37 @@ progress_bar
 
 while true
 	do
+#	tput cup $LINES 0
+#	printf "%s" "q - quit; ? - help;"
+
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
 	end_timestamp=${v_timestamp}
 	oracle_export_stats_data
 	sqlite_import_data
 	sqlite_validate_import
-	sleep $DELAY
+
+	read -s -t $DELAY -n 1 input_char
+	case "${input_char}" in
+		"q") data_purge ;;
+		"?") show_help ;;
+	esac
 	tput clear
+	
 
  		tput sc; tput cup 1 5 ;
-		tput smul; oracle_stats_name;tput rmul; date; hostname -f
+		#tput smul; oracle_stats_name;tput rmul; date; hostname -f
+		tput smul; tput rmul; date; hostname -f
 		tput rmul; tput rc
 
 		tput sc; tput cup 5 5 ;
 		"$SQLITE" "$SQLITE_DB" << __EOF__
 .header on
 .mode column
-		select sid, end_value-begin_value as delta
+		select sid, end_value-begin_value as delta, name
 		from (
-			select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value
-			from (select sid, statvalue from sesstop where timestamp=${end_timestamp}) e
+			select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value, statname as name
+			from (select sid, statvalue, statname from sesstop where timestamp=${end_timestamp}) e
 			left join
      (select sid, statvalue from sesstop where timestamp=${begin_timestamp}) b
 		 on b.sid=e.sid )
