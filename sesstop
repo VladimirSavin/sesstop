@@ -1,21 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  This script report top N sqlsession in db with statname.
 #
 #  Savin
 #
 
-#--  variables -----------------------------------------
-CONF_FILE="/home/oracle/DBA-9417/sesstop.conf"
-TMP_DIR="/tmp/sesstat"
+###############################################################
+#
+ #		Variables definition block BEGIN
+#
+###############################################################
+
+# === Output messages highlight ===
+if [ "$TERM" = "dumb" -o "$TERM" = "unknown" ] ; then
+        RED=""
+        GREEN=""
+        BROWN=""
+        BLUE=""
+        PURPLE=""
+        CYAN=""
+        WHITE=""
+        GRAY=""
+        YELLOW=""
+        OFF=""
+else
+        RED="$(tput setaf 1 2>/dev/null)"
+        GREEN="$(tput setaf 2 2>/dev/null)"
+        BROWN="$(tput setaf 3 2>/dev/null)"
+        BLUE="$(tput setaf 4 2>/dev/null)"
+        PURPLE="$(tput setaf 5 2>/dev/null)"
+        CYAN="$(tput setaf 6 2>/dev/null)"
+        WHITE="$(tput setaf 7 2>/dev/null)"
+        GRAY="$(tput setaf 8 2>/dev/null)"
+        YELLOW="$(tput setaf 11 2>/dev/null)"
+        OFF="$(tput sgr0 2>/dev/null)"
+fi
+# === ===
+
+# === Runtime configuration ===
+#CONF_FILE="/home/oracle/DBA-9417/sesstop.conf"
+TMP_DIR="/tmp/sesstat_$$"
 TMP_FILE=${TMP_DIR}"/temp.dat"
 SQLITE="/usr/bin/sqlite3"
 SQLITE_DB=${TMP_DIR}"/sesstop_$$.dbf"
 DELAY=${DELAY:-20}
-TOP_SIZE=${TOP_SIZE:-10}
+TOP_SIZE=$((`tput lines` - 7 ))
 v_timestamp=`date +%s`
-#-------------------------------------------------------
+# === ===
 
+###############################################################
+#
+ #		Variables definition block END
+#
+###############################################################
+
+###############################################################
+#
+ #		Output functions BEGIN
+#
+###############################################################
+# echo_usage	- output script help
+# echo_error	- output error messages
 echo_usage() {
 	printf "%s\n" "Usage:
 `basename $0` [options]
@@ -41,7 +86,103 @@ Statistics classes:
 "
 }
 
-print_stats() {
+echo_error() {
+        local exe_name=${EXE_NAME:-$0}
+        local str="  ERROR ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
+
+#        if [ $LOG_LEVEL -le 4 ]
+#        then
+                printf "%b" "${RED}${str}${OFF}\n" >&2
+#                printf "%s\n" "${str}" >> $LOG
+#        fi
+#        if [ $LOG_LEVEL -eq 5 ]
+#        then
+#                printf "%s\n" "${str}" >> $LOG
+#        fi
+}
+################################################################
+#
+ #		Output functions END
+#
+################################################################
+################################################################
+#
+ #		Supplementary functions BEGIN
+#
+################################################################
+# check_dirs	- check existance of TMP_DIR and create it if needed
+# check_sqlite	- check existance and executable of SQLITE binary
+# check_command - check result of command and exit on error
+# data_purge	- remove sqlite datafile, tempfile and exit
+check_dirs () {
+	if [ ! -w "${TMP_DIR}" ]
+	then
+		mkdir -p "${TMP_DIR}"
+		check_command $? "Couldn't create temp dir [${TMP_DIR}]"
+	fi
+}
+
+check_sqlite(){
+	if [ ! -x "$SQLITE" ]
+	then
+		echo_error "$SQLITE not found or did not execute";
+		exit 1;
+	fi
+}
+
+check_command() {
+        local exe_name=${EXE_NAME:-$0}
+        local cmd_result
+        local message
+        cmd_result=$?
+        shift
+        message=$@
+        if [ ${cmd_result} -ne 0 ]
+        then
+                echo_error "$message"
+                exit ${cmd_result}
+        fi
+}
+
+data_purge(){
+	rm -f ${TMP_FILE}
+	rm -f ${SQLITE_DB}
+	echo "Data purge"
+	exit 0
+}
+
+progress_bar() {
+        wait_time=0
+        while [ $wait_time -lt $DELAY ]
+        do
+                for s in / - \\ \|
+                do
+                        printf "\r$s"
+                        sleep 1
+                        ((wait_time++))
+                        if [ $wait_time -eq $DELAY ]
+                        then
+                                break
+                        fi
+                done
+        done
+}
+###############################################################
+#
+ #		Supplementary functions END
+#
+###############################################################
+###############################################################
+#
+ #		Oracle functions BEGIN
+#
+###############################################################
+# oracle_print_stats		- output all stats in database or all stats in database within stat class inputed by parameter
+# oracle_find_stat		- find stat name in database which name like inputed parameter
+# oracle_stats_name		- find stat name by ID
+# oracle_export_stats_data	- export stats data from oracle database to temp file
+
+oracle_print_stats() {
 	if [ -z $CLASS ]
 	then
 		query="select statistic#, name from sys.v_\$statname;"
@@ -60,7 +201,7 @@ exit;
 EoOS
 }
 
-find_stat() {
+oracle_find_stat() {
 	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
 set echo off
 set head off
@@ -73,7 +214,7 @@ exit;
 EoOS
 }
 
-stats_name() {
+oracle_stats_name() {
 	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
 set echo off
 set head off
@@ -86,84 +227,9 @@ exit;
 EoOS
 }
 
-output() {
- local v_msg=$1
- local v_datetime=`date +%Y.%m.%d:%H.%M.%S | tr -d [:cntrl:]`
- echo "${v_datetime} ${v_msg}" | tee -a $LOG_FILE
-}
-
-# Check the script is already working. Uncomment this if lock_file need.
-#if [ -f "$LOCK_FILE" ]
-#then
-#	v_lock=`cat $LOCK_FILE`
-#	output "Another process(${v_lock}) with the script is already working"
-#	output "If script did not launch please delete lock file: $LOCK_FILE"
-#exit -1;
-#fi
-
-# Check the directory $TMP_DIR and temp data file $TMP_FILE exists.
-check_dirs () {
-if [ ! -d "$TMP_DIR" ]
-then
-	echo "Create directory $TMP_DIR"
-	mkdir -p $TMP_DIR
-elif [ ! -f "$TMP_FILE" ]
-then
-	echo "Create temp datafile $TMP_FILE"
-	touch $TMP_FILE
-fi
-}
-
-# Check the sqlite soft
-check_sqlite(){
-if [ ! -x "$SQLITE" ]
-then
-	echo "$SQLITE not found or did not execute";
-	exit 1;
-fi
-}
-
-##################################################### после этого переписать проверить #############################
-
-# Create table in sqlite (Добавить проверку существования БД и таблицы)
-create_sqlite_db_table() {
-"$SQLITE" "$SQLITE_DB" << __EOF__
-create table if not exists sesstop (timestamp integer, sid integer, statvalue integer);
-.exit
-__EOF__
-}
-
-# Drop table in sqlite
-drop_sqlite_db_table() {
-"$SQLITE" "$SQLITE_DB" << __EOF__
-drop table if exists sesstop;
-.exit
-__EOF__
-}
-
-# Import data from ${TMP_FILE} to sqlite db ($SQLITE_DB).
-import_data() {
-"$SQLITE" "$SQLITE_DB" << __EOF__
-.mode csv
-.import ${TMP_FILE} sesstop
-.exit
-__EOF__
-}
-
-
-
-# Validate import from ${TMP_FILE} to sqlite db ($SQLITE_DB).
-validate_import() {
-v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`
-v_y=`cat ${TMP_FILE} | wc -l`
-[ "$v_x" -eq "$v_y" ] && ( return 0 ) || ( echo "Validate ERROR"; return 1 );
-}
-
-
-# Create name metrics in this $ORACLE_SID db.
-create_dbf_with_data(){
-v_timestamp=`date +%s`
-$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
+oracle_export_stats_data(){
+	v_timestamp=`date +%s`
+	$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
 whenever sqlerror exit failure
 set head off
 set feedback off
@@ -178,16 +244,59 @@ where st.STATISTIC#=sn.STATISTIC#
 exit
 __EOF__
 }
+###############################################################
+#
+ #		Oracle functions END
+#
+###############################################################
+###############################################################
+#
+ #		SQLITE functions BEGIN
+#
+###############################################################
+# sqlite_create_table		- just create empty table for statistics data
+# sqlite_sqlite_table		- just drop table in sqlite database
+# sqlite_import_data		- Import data from ${TMP_FILE} to sqlite db ${SQLITE_DB}
+# sqlite_validate_import	- Validate import from ${TMP_FILE} to sqlite db ${SQLITE_DB}.
 
-#clear datafile, tempfile and exit
-data_purge(){
-rm -f ${TMP_FILE}
-rm -f ${SQLITE_DB}
-echo "Data purge"
-exit 0
+sqlite_create_table() {
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+drop table if exists sesstop;
+create table sesstop (timestamp integer, sid integer, statvalue integer);
+.exit
+__EOF__
 }
 
-##################################################### до этого переписать проверить #############################
+#sqlite_drop_table() {
+#"$SQLITE" "$SQLITE_DB" << __EOF__
+#drop table if exists sesstop;
+#.exit
+#__EOF__
+#}
+
+sqlite_import_data() {
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+.mode csv
+.import ${TMP_FILE} sesstop
+.exit
+__EOF__
+}
+
+sqlite_validate_import() {
+	v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`
+	v_y=`wc -l ${TMP_FILE} | cut -d' ' -f1`
+	if [ ${v_x} -ne ${v_y} ]
+	then
+		echo_error "Import validation error"
+		exit 1
+	fi
+}
+
+###############################################################
+#
+ #		SQLITE functions END
+#
+###############################################################
 
 
 if [ -z $1 ] #Запуск без параметров выводит echo_usage
@@ -196,20 +305,21 @@ then
 	exit 1
 fi
 
+# no need to source because you run script as oracle user
 # Source parameters
-if [ -f /etc/profile.d/ora_env.sh ]
-then
-	source /etc/profile.d/ora_env.sh
-elif [ -f /etc/profile.d/oracle.sh ]
-then
-	source /etc/profile.d/oracle.sh
-elif [ -f "$CONF_FILE" ]
-then
-	source $CONF_FILE
-else
-	output "Can not source env file"
-	exit 1
-fi
+#if [ -f /etc/profile.d/ora_env.sh ]
+#then
+#	source /etc/profile.d/ora_env.sh
+#elif [ -f /etc/profile.d/oracle.sh ]
+#then
+#	source /etc/profile.d/oracle.sh
+#elif [ -f "$CONF_FILE" ]
+#then
+##	source $CONF_FILE
+##else
+##	echo_error "Can not source env file"
+##	exit 1
+#fi
 
 while [ "$1" != "" ]
 do
@@ -255,7 +365,7 @@ do
 					;;
 				esac
 			fi
-			print_stats
+			oracle_print_stats
 			exit 0
 		;;
 		"-f"|"--find")
@@ -263,7 +373,7 @@ do
 			then
 				STAT_NAME=$2
 			fi
-			find_stat
+			oracle_find_stat
 			exit 0
 		;;
 		"-i"|"--id")
@@ -306,23 +416,34 @@ done
 
 check_dirs;
 check_sqlite;
-create_sqlite_db_table;
+sqlite_create_table;
 
 trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT EXIT SIGKILL
+
+# === Gather initial data ===
+v_timestamp=`date +%s`
+begin_timestamp=${end_timestamp:-0}
+end_timestamp=${v_timestamp}
+oracle_export_stats_data
+sqlite_import_data
+sqlite_validate_import
+
+progress_bar
+# === ===
 
 while true
 	do
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
 	end_timestamp=${v_timestamp}
-	create_dbf_with_data
-	import_data
-	validate_import
+	oracle_export_stats_data
+	sqlite_import_data
+	sqlite_validate_import
 	sleep $DELAY
 	tput clear
 
  		tput sc; tput cup 1 5 ;
-		tput smul; stats_name;tput rmul; date; hostname -f
+		tput smul; oracle_stats_name;tput rmul; date; hostname -f
 		tput rmul; tput rc
 
 		tput sc; tput cup 5 5 ;
