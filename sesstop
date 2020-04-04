@@ -19,16 +19,13 @@ v_timestamp=`date +%s`
 echo_usage() {
 	printf "%s\n" "Usage:
 `basename $0` [options]
-
 Options:
  -l	--list	[class]		show list of statistics in class
  -f	--find  [name]		find statistic with name
  -i	--id	<stat id>	run top on stat id number with default parameters (10 elements and 20 seconds delay)
  -d --delay [number]    delay information update delay [default 20 sec]
  -t --top-size			display number of top elements [default 10]
-
  -h     --help                  display this help and exit
-
 Statistics classes:
 	1. User
 	2. Redo
@@ -128,7 +125,7 @@ fi
 # Create table in sqlite (Добавить проверку существования БД и таблицы)
 create_sqlite_db_table() {
 "$SQLITE" "$SQLITE_DB" << __EOF__
-create table if not exists sesstop (timestamp integer, sid integer, statvalue integer);
+create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);
 .exit
 __EOF__
 }
@@ -144,7 +141,8 @@ __EOF__
 # Import data from ${TMP_FILE} to sqlite db ($SQLITE_DB).
 import_data() {
 "$SQLITE" "$SQLITE_DB" << __EOF__
-.mode csv
+.separator ;
+.mode list
 .import ${TMP_FILE} sesstop
 .exit
 __EOF__
@@ -169,12 +167,14 @@ set head off
 set feedback off
 set newp none
 set pagesize 0
-select ${v_timestamp}||','||st.sid||','||st.value
-from v\$sesstat st, v\$statname sn
+set linesize 1024
+select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
+from v\$sesstat st, v\$statname sn, v\$session s
 where st.STATISTIC#=sn.STATISTIC#
   and sn.STATISTIC#='${ID}'
   and st.value is not null
-  and st.value>0;
+  and st.value>0
+  and s.sid=st.sid;
 exit
 __EOF__
 }
@@ -319,6 +319,20 @@ while true
 	import_data
 	validate_import
 	sleep $DELAY
+	"$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
+select sum(end_value-begin_value) as total
+from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0;
+__EOF__
+	v_x=""
+	v_x=$(cat "$TMP_FILE")
+	[ "$v_x" -eq "0" ] && v_x="1"
+	[ -z "$v_x" ] && v_x="1"
+
 	tput clear
 
  		tput sc; tput cup 1 5 ;
@@ -329,32 +343,24 @@ while true
 		"$SQLITE" "$SQLITE_DB" << __EOF__
 .header on
 .mode column
-		select sid, end_value-begin_value as delta
-		from (
-			select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value
-			from (select sid, statvalue from sesstop where timestamp=${end_timestamp}) e
-			left join
-     (select sid, statvalue from sesstop where timestamp=${begin_timestamp}) b
-		 on b.sid=e.sid )
-		 where (end_value-begin_value)>0
-		 order by delta desc
-		 LIMIT ${TOP_SIZE};
+select sid||','||serial as sessid, 
+       username, program, sql_id, 
+       cast(end_value-begin_value as integer) as delta,
+       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
+from (select e.sid as sid, 
+             e.serial as serial, 
+             e.username as username, 
+             e.program as program, 
+             e.sql_id as sql_id, 
+             cast(e.statvalue as float) as end_value, 
+             cast( ifnull(b.statvalue,0) as float) as begin_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0
+      order by delta desc limit ${TOP_SIZE};
 __EOF__
 done
 	tput rc; tput clear
 
-
-# TODO:
-
-#1 убрать лишний вывод в консоль. оставить только диагностические сообщения с определенным параметром
-#2 убрать именованные параметры:
-#####использовать 3 параметра (причем 2 и 3 сделать не обязательными)
-#####значения delay и top-size при отсутсвии параметров использовать значение по умолчанию
-#####Первый параметр если число, то сразу выводим работу скрипта по данной метрике
-##### Если слово заглавными буквами содержащее класс события то список событий этого класса и подходит под один из 8 классов иначе использовать поиск параметра
-##### если слово но маленькими буквами выводить список грепнутых параметров по этому слову
-#3 оформить вывод в консоль красиво, опеределнную позици, имя метрики, можно описание какое-то ее. и таблицу
-#4 добавить обработку сигналов и цикл бесконечный
-#5 добавить удаление БД для статистики event и каталога для sqlite
-#6 добавить проверку наличия sqlplus и установленных переменных
-#7 добавить удаление временного файла для импорта и удаление файла данных sqlite db
