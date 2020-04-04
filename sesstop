@@ -38,13 +38,13 @@ fi
 # === ===
 
 # === Runtime configuration ===
-CONF_FILE="/home/oracle/DBA-9417/sesstop.conf"
-TMP_DIR="/tmp/sesstat_$$"
+CONF_FILE="sesstop.conf"; [ -f "$CONF_FILE" ] && source "$CONF_FILE"
+TMP_DIR=${TMP_DIR:-"/tmp/sesstat_$$"}
 TMP_FILE=${TMP_DIR}"/temp.dat"
-SQLITE="/usr/bin/sqlite3"
+SQLITE=${SQLITE:-"/usr/bin/sqlite3"}
 SQLITE_DB=${TMP_DIR}"/sesstop_$$.dbf"
 DELAY=${DELAY:-20}
-TOP_SIZE=$((`tput lines` - 8 ))
+[ -z "$TOP_SIZE"] && TOP_SIZE=$((`tput lines` - 10 ))
 v_timestamp=`date +%s`
 SCREEN_SIZE_LINES=$((`tput lines` - 1))
 original_tty_state=$(stty -g)
@@ -144,9 +144,9 @@ check_command() {
 }
 
 data_purge(){
-	rm -f ${TMP_FILE}
-	rm -f ${SQLITE_DB}
-	rm -Rf ${TMP_DIR}
+	[ -f "$TMP_FILE" ] && rm -f ${TMP_FILE}
+	[ -f "$SQLITE_DB" ] rm -f ${SQLITE_DB}
+	[ -d "$TMP_DIR" ] &&  rm -Rf ${TMP_DIR}
 #	echo "Data purge"
 	stty ${original_tty_state}
 	tput reset
@@ -230,7 +230,7 @@ EoOS
 }
 
 oracle_export_stats_data(){
-	v_timestamp=`date +%s`
+	local v_timestamp="$1"
 	if [ -n "${ID}" ]
 	then
 		$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
@@ -239,12 +239,14 @@ set head off
 set feedback off
 set newp none
 set pagesize 0
-select ${v_timestamp}||','||st.sid||','||st.value||','||sn.name
-from v\$sesstat st, v\$statname sn
+set linesize 1024
+select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
+from v\$sesstat st, v\$statname sn, v\$session s
 where st.STATISTIC#=sn.STATISTIC#
   and sn.STATISTIC#='${ID}'
   and st.value is not null
-  and st.value>0;
+  and st.value>0
+  and s.sid=st.sid;
 exit
 __EOF__
 	else
@@ -254,11 +256,13 @@ set head off
 set feedback off
 set newp none
 set pagesize 0
-select ${v_timestamp}||','||st.sid||','||st.value||','||sn.name
-from v\$sesstat st, v\$statname sn
+set linesize 1024
+select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
+from v\$sesstat st, v\$statname sn, v\$session s
 where st.STATISTIC#=sn.STATISTIC#
   and st.value is not null
-  and st.value>0;
+  and st.value>0
+  and s.sid=st.sid;
 exit
 __EOF__
 	fi
@@ -281,21 +285,16 @@ __EOF__
 sqlite_create_table() {
 	"$SQLITE" "$SQLITE_DB" << __EOF__
 drop table if exists sesstop;
-create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));
+--create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));
+create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);
 .exit
 __EOF__
 }
 
-#sqlite_drop_table() {
-#"$SQLITE" "$SQLITE_DB" << __EOF__
-#drop table if exists sesstop;
-#.exit
-#__EOF__
-#}
-
 sqlite_import_data() {
 	"$SQLITE" "$SQLITE_DB" << __EOF__
-.mode csv
+.separator ;
+.mode list
 .import ${TMP_FILE} sesstop
 .exit
 __EOF__
@@ -309,6 +308,16 @@ sqlite_validate_import() {
 		echo_error "Import validation error"
 		exit 1
 	fi
+}
+
+sqlite_delete_old_samples() {
+	local begin_timestamp="$1"
+	local end_timestamp="$2"
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+--delete from sesstop where timestamp not in (select distinct timestamp from sesstop order by 1 desc limit 2);
+delete from sesstop where timestamp not in (${begin_timestamp}, ${end_timestamp});
+.exit
+__EOF__
 }
 
 ###############################################################
@@ -443,7 +452,8 @@ trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT EXIT SIGKILL
 v_timestamp=`date +%s`
 begin_timestamp=${end_timestamp:-0}
 end_timestamp=${v_timestamp}
-oracle_export_stats_data
+# echo "$begin_timestamp $end_timestamp"
+oracle_export_stats_data "$end_timestamp"
 sqlite_import_data
 sqlite_validate_import
 
@@ -458,9 +468,10 @@ while true
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
 	end_timestamp=${v_timestamp}
-	oracle_export_stats_data
+	oracle_export_stats_data "$end_timestamp"
 	sqlite_import_data
 	sqlite_validate_import
+	sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
 
 	read -s -t $DELAY -n 1 input_char
 	case "${input_char}" in
@@ -468,27 +479,50 @@ while true
 		"?") show_help ;;
 	esac
 	tput clear
+	"$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
+select sum(end_value-begin_value) as total
+from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0;
+__EOF__
+	v_x=""
+	v_x=$(cat "$TMP_FILE")
+	[ "$v_x" -eq "0" ] && v_x="1"
+	[ -z "$v_x" ] && v_x="1"
 	
 
- 		tput sc; tput cup 1 5 ;
+ 		#tput sc; tput cup 1 5 ;
 		#tput smul; oracle_stats_name;tput rmul; date; hostname -f
-		tput smul; tput rmul; date; hostname -f
+		#tput smul; tput rmul; date; hostname -f
+		#tput rmul; tput rc
+		tput sc; tput cup 1 5 ;
+		tput smul; oracle_stats_name; tput rmul; date; hostname -f
 		tput rmul; tput rc
 
 		tput sc; tput cup 5 5 ;
 		"$SQLITE" "$SQLITE_DB" << __EOF__
 .header on
 .mode column
-		select sid, end_value-begin_value as delta, name
-		from (
-			select e.sid as sid, e.statvalue as end_value, ifnull(b.statvalue,0) as begin_value, statname as name
-			from (select sid, statvalue, statname from sesstop where timestamp=${end_timestamp}) e
-			left join
-     (select sid, statvalue from sesstop where timestamp=${begin_timestamp}) b
-		 on b.sid=e.sid )
-		 where (end_value-begin_value)>0
-		 order by delta desc
-		 LIMIT ${TOP_SIZE};
+select sid||','||serial as sessid, 
+       username, program, sql_id, 
+       cast(end_value-begin_value as integer) as delta,
+       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
+from (select e.sid as sid, 
+             e.serial as serial, 
+             e.username as username, 
+             e.program as program, 
+             e.sql_id as sql_id, 
+             cast(e.statvalue as float) as end_value, 
+             cast( ifnull(b.statvalue,0) as float) as begin_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0
+      order by delta desc limit ${TOP_SIZE};
 __EOF__
 done
 	tput rc; tput clear
@@ -496,16 +530,4 @@ done
 
 # TODO:
 
-#1 убрать лишний вывод в консоль. оставить только диагностические сообщения с определенным параметром
-#2 убрать именованные параметры:
-#####использовать 3 параметра (причем 2 и 3 сделать не обязательными)
-#####значения delay и top-size при отсутсвии параметров использовать значение по умолчанию
-#####Первый параметр если число, то сразу выводим работу скрипта по данной метрике
-##### Если слово заглавными буквами содержащее класс события то список событий этого класса и подходит под один из 8 классов иначе использовать поиск параметра
-##### если слово но маленькими буквами выводить список грепнутых параметров по этому слову
-#3 оформить вывод в консоль красиво, опеределнную позици, имя метрики, можно описание какое-то ее. и таблицу
-#4 добавить обработку сигналов и цикл бесконечный
-#5 добавить удаление БД для статистики event и каталога для sqlite
-#6 добавить проверку наличия sqlplus и установленных переменных
-#7 добавить удаление временного файла для импорта и удаление файла данных sqlite db
 
