@@ -40,9 +40,9 @@ __EOF__
 ./sesstop.sh -i 12
 ```
 
-Script's concept and sql-queries was offered by Maksim Ivanov (MaksimIvanovPerm https://github.com/MaksimIvanovPerm)
+Script's concept and sql-queries was offered by Maksim Ivanov ([MaksimIvanovPerm](https://github.com/MaksimIvanovPerm) )
 
-Some code and parameters options processing was developed by Denis Vodopyanov (dvodop https://github.com/dvodop)
+Some code and parameters options processing was developed by Denis Vodopyanov ([dvodop](https://github.com/dvodop) )
 
 ![screen](screen.png)
 
