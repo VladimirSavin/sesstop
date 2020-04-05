@@ -1,5 +1,6 @@
 # sesstop
 This script report top N sql-sessions in db with statname.
+```
 sesstop [options]
 Options:
  -l	--list	[class]		show list of statistics in class
@@ -8,16 +9,17 @@ Options:
  -d --delay [number]  delay information update delay [default 20 sec]
  -t --top-size			  display number of top elements [default 10]
  -h     --help        display this help and exit
+ ```
 
 Statistics classes:
-	1. User
-	2. Redo
-	3. Enqueue
-	4. Cache
-	5. OS
-	6. Real Application Clusters
-	7. SQL
-	8. Debug
+1. User
+2. Redo
+3. Enqueue
+4. Cache
+5. OS
+6. Real Application Clusters
+7. SQL
+8. Debug
   
 Temp data used sqlite db.
 
