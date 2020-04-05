@@ -12,17 +12,7 @@ Options:
  -h     --help        display this help and exit
  ```
 
-Statistics classes:
-1. User
-2. Redo
-3. Enqueue
-4. Cache
-5. OS
-6. Real Application Clusters
-7. SQL
-8. Debug
-  
-As a prerequirements: sqlite should be installed and be available. 
+As a prerequirements: sqlite should be installed and be available.
 Current version of the script was developed with sqlite 3.3.6;
 You have to write full path to sqlite-binary and database-file to bash-variables __SQLITE, SQLITE_DB__ inside the script;
 Or you can provide the script with that information (and make some other settings) through conf-file, which have to be placed at the same directory and named as __sesstop.conf__
