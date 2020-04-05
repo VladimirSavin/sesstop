@@ -11,6 +11,17 @@ Options:
  -t --top-size			  display number of top elements [default 10]
  -h     --help        display this help and exit
  ```
+```
+Statistics classes:	As a prerequirements: sqlite should be installed and be available.
+1. User	
+2. Redo	
+3. Enqueue	
+4. Cache	
+5. OS	
+6. Real Application Clusters	
+7. SQL	
+8. Debug
+```
 
 As a prerequirements: sqlite should be installed and be available.
 Current version of the script was developed with sqlite 3.3.6;
