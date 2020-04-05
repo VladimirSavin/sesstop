@@ -1,5 +1,6 @@
 # sesstop
 This script report top N sql-sessions in db with statname.
+It's cli-utility, bash script, which works like top-utility, but with data about oracle sql-session;
 ```
 sesstop [options]
 Options:
@@ -21,16 +22,28 @@ Statistics classes:
 7. SQL
 8. Debug
   
-Temp data used sqlite db.
+As a prerequirements: sqlite should be installed and be available. 
+Current version of the script was developed with sqlite 3.3.6;
+You have to write full path to sqlite-binary and database-file to bash-variables __SQLITE, SQLITE_DB__ inside the script;
+Or you can provide the script with that information (and make some other settings) through conf-file, which have to be placed at the same directory and named as __sesstop.conf__
+For instance:
+```bash
+CONF_FILE="sesstop.conf"
+cat << __EOF__ > "$CONF_FILE"
+TMP_DIR="/tmp/sesstat_$$"
+TMP_FILE="/tmp/sesstat_$$/temp.dat"
+SQLITE="/usr/bin/sqlite3"
+SQLITE_DB="/tmp/sesstat_$$/sesstop_$$.dbf"
+DELAY="5"
+TOP_SIZE="15"
+__EOF__
+./sesstop.sh -i 12
+```
 
-This utility can be used to find and list stat name in database.
+Script's concept and sql-queries was offered by Maksim Ivanov (MaksimIvanovPerm https://github.com/MaksimIvanovPerm)
 
-Idea and sql queries by Maksim Ivanov (MaksimIvanovPerm https://github.com/MaksimIvanovPerm)
+Some code and parameters options processing was developed by Denis Vodopyanov (dvodop https://github.com/dvodop)
 
-Some code and parameters options by Denis Vodopyanov (dvodop https://github.com/dvodop)
-
-sesstop: it's cli-utility, bash script, which works like top-utility, but with data about oracle sql-session;
 ![screen](screen.png)
-
 
 Thanks for the mentoring and support Maksim Ivanov and Denis Vodopyanov.
