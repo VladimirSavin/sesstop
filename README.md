@@ -29,11 +29,10 @@ TOP_SIZE="15"
 __EOF__
 ./sesstop.sh -i 12
 ```
+![screen](screen.png)
 
 Script's concept and sql-queries was offered by Maksim Ivanov ([MaksimIvanovPerm](https://github.com/MaksimIvanovPerm) )
 
 Some code and parameters options processing was developed by Denis Vodopyanov ([dvodop](https://github.com/dvodop) )
-
-![screen](screen.png)
 
 Thanks for the mentoring and support Maksim Ivanov and Denis Vodopyanov.
