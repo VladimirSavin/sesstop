@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-#  This script provides dynamic report about top-N sql-sessions, in sense of one, setted for the script, database-statistic. 
+#  This script provides dynamic report about top-N sql-sessions, in sense of one, setted for the script, database-statistic.
 #  This script is intended to be used with oracle-database;
 #
 #  Savin,Vodopyanov,Ivanov (c) 2020
@@ -186,351 +186,348 @@ progress_bar() {
 ###############################################################
 # oracle_print_stats		- output all stats in database or all stats in database within stat class inputed by parameter
 # oracle_find_stat		- find stat name in database which name like inputed parameter
-# oracle_stats_name		- find stat name by ID	
-# oracle_export_stats_data	- export stats data from oracle database to temp file	
+# oracle_stats_name		- find stat name by ID
+# oracle_export_stats_data	- export stats data from oracle database to temp file
 
-oracle_print_stats() {	
-	if [ -z $CLASS ]	
-	then	
-		query="select statistic#, name from sys.v_\$statname;"	
-	else	
-		query="select statistic#, name from sys.v_\$statname where class=$CLASS;"	
-	fi	
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS	
-set echo off	
-set head off	
-set feedback off	
-set linesize 180	
-set pagesize 0	
-column name format a70	
-$query	
-exit;	
-EoOS	
-}	
+oracle_print_stats() {
+	if [ -z $CLASS ]
+	then
+		query="select statistic#, name from sys.v_\$statname;"
+	else
+		query="select statistic#, name from sys.v_\$statname where class=$CLASS;"
+	fi
+	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
+set echo off
+set head off
+set feedback off
+set linesize 180
+set pagesize 0
+column name format a70
+$query
+exit;
+EoOS
+}
 
-oracle_find_stat() {	
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS	
-set echo off	
-set head off	
-set feedback off	
-set linesize 180	
-set pagesize 0	
-column name format a70	
-select statistic#, name from sys.v_\$statname where lower(name) like lower('%${STAT_NAME}%');	
-exit;	
-EoOS	
-}	
+oracle_find_stat() {
+	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
+set echo off
+set head off
+set feedback off
+set linesize 180
+set pagesize 0
+column name format a70
+select statistic#, name from sys.v_\$statname where lower(name) like lower('%${STAT_NAME}%');
+exit;
+EoOS
+}
 
-oracle_stats_name() {	
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS	
-set echo off	
-set head off	
-set feedback off	
-set linesize 180	
-set pagesize 0	
-column name format a70	
-select statistic#, name from sys.v_\$statname where statistic#=${ID} ;	
-exit;	
-EoOS	
-}	
+oracle_stats_name() {
+	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
+set echo off
+set head off
+set feedback off
+set linesize 180
+set pagesize 0
+column name format a70
+select statistic#, name from sys.v_\$statname where statistic#=${ID} ;
+exit;
+EoOS
+}
 
-oracle_export_stats_data(){	
-	local v_timestamp="$1"	
-	if [ -n "${ID}" ]	
-	then	
-		$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"	
-whenever sqlerror exit failure	
-set head off	
-set feedback off	
-set newp none	
-set pagesize 0	
-set linesize 1024	
-select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value	
-from v\$sesstat st, v\$statname sn, v\$session s	
-where st.STATISTIC#=sn.STATISTIC#	
-  and sn.STATISTIC#='${ID}'	
-  and st.value is not null	
-  and st.value>0	
-  and s.sid=st.sid;	
-exit	
-__EOF__	
-	else	
-	        $ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"	
-whenever sqlerror exit failure	
-set head off	
-set feedback off	
-set newp none	
-set pagesize 0	
-set linesize 1024	
-select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value	
-from v\$sesstat st, v\$statname sn, v\$session s	
-where st.STATISTIC#=sn.STATISTIC#	
-  and st.value is not null	
-  and st.value>0	
-  and s.sid=st.sid;	
-exit	
-__EOF__	
-	fi	
-}	
-###############################################################	
-#	
- #		Oracle functions END	
-#	
-###############################################################	
-###############################################################	
-#	
- #		SQLITE functions BEGIN	
-#	
-###############################################################	
-# sqlite_create_table		- just create empty table for statistics data	
-# sqlite_sqlite_table		- just drop table in sqlite database	
-# sqlite_import_data		- Import data from ${TMP_FILE} to sqlite db ${SQLITE_DB}	
-# sqlite_validate_import	- Validate import from ${TMP_FILE} to sqlite db ${SQLITE_DB}.	
+oracle_export_stats_data(){
+	local v_timestamp="$1"
+	if [ -n "${ID}" ]
+	then
+		$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
+whenever sqlerror exit failure
+set head off
+set feedback off
+set newp none
+set pagesize 0
+set linesize 1024
+select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
+from v\$sesstat st, v\$statname sn, v\$session s
+where st.STATISTIC#=sn.STATISTIC#
+  and sn.STATISTIC#='${ID}'
+  and st.value is not null
+  and st.value>0
+  and s.sid=st.sid;
+exit
+__EOF__
+	else
+	        $ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
+whenever sqlerror exit failure
+set head off
+set feedback off
+set newp none
+set pagesize 0
+set linesize 1024
+select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
+from v\$sesstat st, v\$statname sn, v\$session s
+where st.STATISTIC#=sn.STATISTIC#
+  and st.value is not null
+  and st.value>0
+  and s.sid=st.sid;
+exit
+__EOF__
+	fi
+}
+###############################################################
+#
+ #		Oracle functions END
+#
+###############################################################
+###############################################################
+#
+ #		SQLITE functions BEGIN
+#
+###############################################################
+# sqlite_create_table		- just create empty table for statistics data
+# sqlite_sqlite_table		- just drop table in sqlite database
+# sqlite_import_data		- Import data from ${TMP_FILE} to sqlite db ${SQLITE_DB}
+# sqlite_validate_import	- Validate import from ${TMP_FILE} to sqlite db ${SQLITE_DB}.
 
-sqlite_create_table() {	
-	"$SQLITE" "$SQLITE_DB" << __EOF__	
-drop table if exists sesstop;	
---create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));	
-create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);	
-.exit	
-__EOF__	
-}	
+sqlite_create_table() {
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+drop table if exists sesstop;
+--create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));
+create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);
+.exit
+__EOF__
+}
 
-sqlite_import_data() {	
-	"$SQLITE" "$SQLITE_DB" << __EOF__	
-.separator ;	
-.mode list	
-.import ${TMP_FILE} sesstop	
-.exit	
-__EOF__	
-}	
+sqlite_import_data() {
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+.separator ;
+.mode list
+.import ${TMP_FILE} sesstop
+.exit
+__EOF__
+}
 
-sqlite_validate_import() {	
-	v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`	
-	v_y=`wc -l ${TMP_FILE} | cut -d' ' -f1`	
-	if [ ${v_x} -ne ${v_y} ]	
-	then	
-		echo_error "Import validation error"	
-		exit 1	
-	fi	
-}	
+sqlite_validate_import() {
+	v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`
+	v_y=`wc -l ${TMP_FILE} | cut -d' ' -f1`
+	if [ ${v_x} -ne ${v_y} ]
+	then
+		echo_error "Import validation error"
+		exit 1
+	fi
+}
 
-sqlite_delete_old_samples() {	
-	local begin_timestamp="$1"	
-	local end_timestamp="$2"	
-	"$SQLITE" "$SQLITE_DB" << __EOF__	
---delete from sesstop where timestamp not in (select distinct timestamp from sesstop order by 1 desc limit 2);	
-delete from sesstop where timestamp not in (${begin_timestamp}, ${end_timestamp});	
-.exit	
-__EOF__	
-}	
+sqlite_delete_old_samples() {
+	local begin_timestamp="$1"
+	local end_timestamp="$2"
+	"$SQLITE" "$SQLITE_DB" << __EOF__
+--delete from sesstop where timestamp not in (select distinct timestamp from sesstop order by 1 desc limit 2);
+delete from sesstop where timestamp not in (${begin_timestamp}, ${end_timestamp});
+.exit
+__EOF__
+}
 
-###############################################################	
-#	
- #		SQLITE functions END	
-#	
-###############################################################	
-
-
-#if [ -z $1 ] #Запуск без параметров выводит echo_usage	
-#then	
-#	echo_usage	
-#	exit 1	
-#fi	
-
-# no need to source because you run script as oracle user	
-# Source parameters	
-#if [ -f /etc/profile.d/ora_env.sh ]	
-#then	
-#	source /etc/profile.d/ora_env.sh	
-#elif [ -f /etc/profile.d/oracle.sh ]	
-#then	
-#	source /etc/profile.d/oracle.sh	
-#elif [ -f "$CONF_FILE" ]	
-#then	
-##	source $CONF_FILE	
-##else	
-##	echo_error "Can not source env file"	
-##	exit 1	
-#fi	
-
-while [ "$1" != "" ]	
-do	
-	case "$1" in	
-		"-h"|"--help")	
-			echo_usage	
-			exit 0	
-		;;	
-		"-l"|"--list")	
-			if [[ ! "$2" =~ ^- ]] && [[ -n "$2" ]]	
-			then	
-				# https://docs.oracle.com/cd/B19306_01/server.102/b14237/dynviews_2136.htm#REFRN30265	
-				# https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/V-STATNAME.html#GUID-B4022F4A-ADA9-411D-BB4B-E3D74B5BB2D6	
-				case "$2" in	
-					"User")	
-						CLASS=1	
-					;;	
-					"Redo")	
-						CLASS=2	
-					;;	
-					"Enqueue")	
-						CLASS=4	
-					;;	
-
-					"Cache")	
-						CLASS=8	
-					;;	
-					"OS")	
-						CLASS=16	
-					;;	
-					"Real Application Clusters")	
-						CLASS=32	
-					;;	
-					"SQL")	
-						CLASS=64	
-					;;	
-					"Debug")	
-						CLASS=128	
-					;;	
-					*)	
-						echo_usage	
-						exit 1	
-					;;	
-				esac	
-			fi	
-			oracle_print_stats	
-			exit 0	
-		;;	
-		"-f"|"--find")	
-			if [[ ! "$2" =~ ^- ]]	
-			then	
-				STAT_NAME=$2	
-			fi	
-			oracle_find_stat	
-			exit 0	
-		;;	
-		"-i"|"--id")	
-			if [ -z $2 ]	
-			then	
-				printf "%s\n" "You did not choose on statistic ID."	
-				exit 1	
-			fi	
-			ID=$2	
-			printf "%s\n" " You want to see top on statistic #${ID}."	
-			shift 2	
-		;;	
-		"-d"|"--delay")	
-			if  [[ ! "$2" =~ ^- ]] && [[ ! -z "$2" ]]	
-			then	
-				DELAY=$2	
-				printf "%s\n" "DELAY is set to ${DELAY} second[s]."	
-			else	
-				printf "%s\n" "You did not choose on DELAY."	
-				exit 1	
-			fi	
-			shift 2	
-		;;	
-		"-t"|"--top_size")	
-			if [ -z $2 ]	
-			then	
-				printf "%s\n" "You did not choose on TOP_SIZE."	
-				exit 1	
-			fi	
-			TOP_SIZE=$2	
-			printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."	
-			shift 2	
-		;;	
-		*) echo "$1 is not an option"	
-			echo_usage	
-			exit 1	
-		;;	
-	esac	
-done	
-
-check_dirs;	
-check_sqlite;	
-sqlite_create_table;	
-
-trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT EXIT SIGKILL	
-
-# === Gather initial data ===	
-v_timestamp=`date +%s`	
-begin_timestamp=${end_timestamp:-0}	
-end_timestamp=${v_timestamp}	
-# echo "$begin_timestamp $end_timestamp"	
-oracle_export_stats_data "$end_timestamp"	
-sqlite_import_data	
-sqlite_validate_import	
-
-progress_bar	
-# === ===	
-
-while true	
-	do	
-#	tput cup $LINES 0	
-#	printf "%s" "q - quit; ? - help;"	
-
-	v_timestamp=`date +%s`	
-	begin_timestamp=${end_timestamp:-0}	
-	end_timestamp=${v_timestamp}	
-	oracle_export_stats_data "$end_timestamp"	
-	sqlite_import_data	
-	sqlite_validate_import	
-	sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"	
-
-	read -s -t $DELAY -n 1 input_char	
-	case "${input_char}" in	
-		"q") data_purge ;;	
-		"?") show_help ;;	
-	esac	
-	tput clear	
-	"$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"	
-select sum(end_value-begin_value) as total	
-from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value	
-      from (select * from sesstop where timestamp=${end_timestamp}) e	
-           left join	
-           (select * from sesstop where timestamp=${begin_timestamp}) b	
-           on ( b.sid=e.sid and b.serial=e.serial ) )	
-      where (end_value-begin_value)>0;	
-__EOF__	
-	v_x=""	
-	v_x=$(cat "$TMP_FILE")	
-	[ "$v_x" -eq "0" ] && v_x="1"	
-	[ -z "$v_x" ] && v_x="1"	
+###############################################################
+#
+ #		SQLITE functions END
+#
+###############################################################
 
 
- 		#tput sc; tput cup 1 5 ;	
-		#tput smul; oracle_stats_name;tput rmul; date; hostname -f	
-		#tput smul; tput rmul; date; hostname -f	
-		#tput rmul; tput rc	
-		tput sc; tput cup 1 5 ;	
-		tput smul; oracle_stats_name; tput rmul; date; hostname -f	
-		tput rmul; tput rc	
+#if [ -z $1 ] #Запуск без параметров выводит echo_usage
+#then
+#	echo_usage
+#	exit 1
+#fi
 
-		tput sc; tput cup 5 5 ;	
-		"$SQLITE" "$SQLITE_DB" << __EOF__	
-.header on	
-.mode column	
-select sid||','||serial as sessid, 	
-       username, program, sql_id, 	
-       cast(end_value-begin_value as integer) as delta,	
-       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance	
-from (select e.sid as sid, 	
-             e.serial as serial, 	
-             e.username as username, 	
-             e.program as program, 	
-             e.sql_id as sql_id, 	
-             cast(e.statvalue as float) as end_value, 	
-             cast( ifnull(b.statvalue,0) as float) as begin_value	
-      from (select * from sesstop where timestamp=${end_timestamp}) e	
-           left join	
-           (select * from sesstop where timestamp=${begin_timestamp}) b	
-           on ( b.sid=e.sid and b.serial=e.serial ) )	
-      where (end_value-begin_value)>0	
-      order by delta desc limit ${TOP_SIZE};	
-__EOF__	
-done	
-	tput rc; tput clear	
+# no need to source because you run script as oracle user
+# Source parameters
+#if [ -f /etc/profile.d/ora_env.sh ]
+#then
+#	source /etc/profile.d/ora_env.sh
+#elif [ -f /etc/profile.d/oracle.sh ]
+#then
+#	source /etc/profile.d/oracle.sh
+#elif [ -f "$CONF_FILE" ]
+#then
+##	source $CONF_FILE
+##else
+##	echo_error "Can not source env file"
+##	exit 1
+#fi
+
+while [ "$1" != "" ]
+do
+	case "$1" in
+		"-h"|"--help")
+			echo_usage
+			exit 0
+		;;
+		"-l"|"--list")
+			if [[ ! "$2" =~ ^- ]] && [[ -n "$2" ]]
+			then
+				# https://docs.oracle.com/cd/B19306_01/server.102/b14237/dynviews_2136.htm#REFRN30265
+				# https://docs.oracle.com/en/database/oracle/oracle-database/19/refrn/V-STATNAME.html#GUID-B4022F4A-ADA9-411D-BB4B-E3D74B5BB2D6
+				case "$2" in
+					"User")
+						CLASS=1
+					;;
+					"Redo")
+						CLASS=2
+					;;
+					"Enqueue")
+						CLASS=4
+					;;
+
+					"Cache")
+						CLASS=8
+					;;
+					"OS")
+						CLASS=16
+					;;
+					"Real Application Clusters")
+						CLASS=32
+					;;
+					"SQL")
+						CLASS=64
+					;;
+					"Debug")
+						CLASS=128
+					;;
+					*)
+						echo_usage
+						exit 1
+					;;
+				esac
+			fi
+			oracle_print_stats
+			exit 0
+		;;
+		"-f"|"--find")
+			if [[ ! "$2" =~ ^- ]]
+			then
+				STAT_NAME=$2
+			fi
+			oracle_find_stat
+			exit 0
+		;;
+		"-i"|"--id")
+			if [ -z $2 ]
+			then
+				printf "%s\n" "You did not choose on statistic ID."
+				exit 1
+			fi
+			ID=$2
+			printf "%s\n" " You want to see top on statistic #${ID}."
+			shift 2
+		;;
+		"-d"|"--delay")
+			if  [[ ! "$2" =~ ^- ]] && [[ ! -z "$2" ]]
+			then
+				DELAY=$2
+				printf "%s\n" "DELAY is set to ${DELAY} second[s]."
+			else
+				printf "%s\n" "You did not choose on DELAY."
+				exit 1
+			fi
+			shift 2
+		;;
+		"-t"|"--top_size")
+			if [ -z $2 ]
+			then
+				printf "%s\n" "You did not choose on TOP_SIZE."
+				exit 1
+			fi
+			TOP_SIZE=$2
+			printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."
+			shift 2
+		;;
+		*) echo "$1 is not an option"
+			echo_usage
+			exit 1
+		;;
+	esac
+done
+
+check_dirs;
+check_sqlite;
+sqlite_create_table;
+
+trap 'data_purge' SIGINT SIGTERM SIGHUP SIGQUIT EXIT SIGKILL
+
+# === Gather initial data ===
+v_timestamp=`date +%s`
+begin_timestamp=${end_timestamp:-0}
+end_timestamp=${v_timestamp}
+# echo "$begin_timestamp $end_timestamp"
+oracle_export_stats_data "$end_timestamp"
+sqlite_import_data
+sqlite_validate_import
+
+progress_bar
+# === ===
+
+while true
+	do
+#	tput cup $LINES 0
+#	printf "%s" "q - quit; ? - help;"
+
+	v_timestamp=`date +%s`
+	begin_timestamp=${end_timestamp:-0}
+	end_timestamp=${v_timestamp}
+	oracle_export_stats_data "$end_timestamp"
+	sqlite_import_data
+	sqlite_validate_import
+	sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
+
+	read -s -t $DELAY -n 1 input_char
+	case "${input_char}" in
+		"q") data_purge ;;
+		"?") show_help ;;
+	esac
+	tput clear
+	"$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
+select sum(end_value-begin_value) as total
+from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0;
+__EOF__
+	v_x=""
+	v_x=$(cat "$TMP_FILE")
+	[ "$v_x" -eq "0" ] && v_x="1"
+	[ -z "$v_x" ] && v_x="1"
 
 
-# TODO:	
+ 		#tput sc; tput cup 1 5 ;
+		#tput smul; oracle_stats_name;tput rmul; date; hostname -f
+		#tput smul; tput rmul; date; hostname -f
+		#tput rmul; tput rc
+		tput sc; tput cup 1 5 ;
+		tput smul; oracle_stats_name; tput rmul; date; hostname -f
+		tput rmul; tput rc
+
+		tput sc; tput cup 5 5 ;
+		"$SQLITE" "$SQLITE_DB" << __EOF__
+.header on
+.mode column
+select sid||','||serial as sessid,
+       username, program, sql_id,
+       cast(end_value-begin_value as integer) as delta,
+       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
+from (select e.sid as sid,
+             e.serial as serial,
+             e.username as username,
+             e.program as program,
+             e.sql_id as sql_id,
+             cast(e.statvalue as float) as end_value,
+             cast( ifnull(b.statvalue,0) as float) as begin_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0
+      order by delta desc limit ${TOP_SIZE};
+__EOF__
+done
+	tput rc; tput clear
