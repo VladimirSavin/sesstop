@@ -1,5 +1,6 @@
 # sesstop
-This script report top N sql-sessions in db with statname.
+This script provides dynamic report about top-N sql-sessions, in sense of one, setted for the script, database-statistic. 
+This script is intended to be used with oracle-database.
 It's cli-utility, bash script, which works like top-utility, but with data about oracle sql-session;
 ```
 sesstop [options]
