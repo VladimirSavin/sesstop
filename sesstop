@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-#  This script report top N sqlsession in db with statname.
+#  This script provides dynamic report about top-N sql-sessions, in sense of one, setted for the script, database-statistic. 
+#  This script is intended to be used with oracle-database;
 #
-#  Savin
+#  Savin,Vodopyanov,Ivanov (c) 2020
 #
 
 ###############################################################
