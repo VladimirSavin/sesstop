@@ -13,7 +13,7 @@ Options:
  -h     --help        display this help and exit
  ```
 ```
-Statistics classes:	As a prerequirements: sqlite should be installed and be available.
+Statistics classes:	
 1. User	
 2. Redo	
 3. Enqueue	
