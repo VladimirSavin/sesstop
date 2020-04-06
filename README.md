@@ -11,6 +11,7 @@ Options:
  -d --delay [number]  delay information update delay [default 20 sec]
  -t --top-size			  display number of top elements [default 10]
  -h     --help        display this help and exit
+ -n     --nodeletedb            Do not delete sqlitedb after script ending; By default: it'll be erased;
  ```
 ```
 Statistics classes:	
