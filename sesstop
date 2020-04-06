@@ -502,8 +502,8 @@ from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
 __EOF__
 	v_x=""
 	v_x=$(cat "$TMP_FILE")
-	[ "$v_x" -eq "0" ] && v_x="1"
 	[ -z "$v_x" ] && v_x="1"
+	[ "$v_x" -eq "0" ] && v_x="1"
 
 
  		#tput sc; tput cup 1 5 ;
