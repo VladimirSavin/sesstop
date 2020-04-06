@@ -447,6 +447,13 @@ do
 	esac
 done
 
+if [ -z "$ID" ]
+then
+	echo_error "Stat ID not set"
+	echo_usage
+	exit 1
+fi
+
 check_dirs;
 check_sqlite;
 sqlite_create_table;
