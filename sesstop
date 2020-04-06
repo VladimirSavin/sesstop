@@ -47,12 +47,15 @@ cat "$CONF_FILE"
 TMP_DIR=${TMP_DIR:-"/tmp/sesstat_$$"}
 TMP_FILE=${TMP_DIR}"/temp.dat"
 SQLITE=${SQLITE:-"/usr/bin/sqlite3"}
-SQLITE_DB=${TMP_DIR}"/sesstop_$$.dbf"
+SQLITE_DB=${TMP_DIR}"/sesstop_$$.dbf"; [ -f "$SQLITE_DB" ] && rm -f "$SQLITE_DB"
 DELAY=${DELAY:-20}
 [ -z "$TOP_SIZE" ] && TOP_SIZE=$((`tput lines` - 10 ))
 v_timestamp=`date +%s`
 SCREEN_SIZE_LINES=$((`tput lines` - 1))
 original_tty_state=$(stty -g)
+# To delete (0) or not to delete (1) sqlitedb at exit; 
+# it may be necessary to retain datbase, for example - for some analysis later in time;
+NODELITEDB="0"
 # === ===
 
 ###############################################################
@@ -78,6 +81,7 @@ Options:
  -d --delay [number]    delay information update delay [default 20 sec]
  -t --top-size			display number of top elements [default 10]
  -h     --help                  display this help and exit
+ -n	--nodeletedb		Do not delete sqlitedb after script ending; By default: it'll be erased;
 Statistics classes:
 	1. User
 	2. Redo
@@ -148,10 +152,18 @@ check_command() {
         fi
 }
 
-data_purge(){
+data_purge() {
 	[ -f "$TMP_FILE" ] && rm -f ${TMP_FILE}
-	[ -f "$SQLITE_DB" ] rm -f ${SQLITE_DB}
-	[ -d "$TMP_DIR" ] &&  rm -Rf ${TMP_DIR}
+	if [ -f "$SQLITE_DB" ] 
+	then
+		if [ "$NODELITEDB" -eq "0"  ] 
+		then
+			rm -f ${SQLITE_DB}
+			[ -d "$TMP_DIR" ] && rm -Rf ${TMP_DIR}
+		else
+			printf "%s\n" "You preferred to save sqlitedb, it'leaved intact as ${SQLITE_DB}"
+		fi
+	fi
 #	echo "Data purge"
 	stty ${original_tty_state}
 	tput reset
@@ -294,6 +306,14 @@ drop table if exists sesstop;
 create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);
 .exit
 __EOF__
+
+if [ "$NODELITEDB" -ne "0"  ]
+then
+"$SQLITE" "$SQLITE_DB" << __EOF__
+create index if not exists timestamp_idx on sesstop(timestamp);
+__EOF__
+fi
+
 }
 
 sqlite_import_data() {
@@ -440,6 +460,11 @@ do
 			printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."
 			shift 2
 		;;
+		"-n"|"--nodeletedb")
+			NODELITEDB="1"
+			printf "%s\n" "SqliteDB will be retained after exit, as ${SQLITE_DB}"
+			shift 1
+		;;
 		*) echo "$1 is not an option"
 			echo_usage
 			exit 1
@@ -483,7 +508,13 @@ while true
 	oracle_export_stats_data "$end_timestamp"
 	sqlite_import_data
 	sqlite_validate_import
-	sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
+	if [ "$NODELITEDB" -eq "0" ]
+	then
+		#So, as NODELITEDB=0 - it means sqlitedb will'be deleted as script exit;
+		#So it's not necssary to accumulate data in there 
+		#and and, in sake resource saving, unnecessary samples of data: will be deleted right now;
+		sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
+	fi
 
 	read -s -t $DELAY -n 1 input_char
 	case "${input_char}" in
@@ -505,11 +536,6 @@ __EOF__
 	[ -z "$v_x" ] && v_x="1"
 	[ "$v_x" -eq "0" ] && v_x="1"
 
-
- 		#tput sc; tput cup 1 5 ;
-		#tput smul; oracle_stats_name;tput rmul; date; hostname -f
-		#tput smul; tput rmul; date; hostname -f
-		#tput rmul; tput rc
 		tput sc; tput cup 1 5 ;
 		tput smul; oracle_stats_name; tput rmul; date; hostname -f
 		tput rmul; tput rc
@@ -538,3 +564,4 @@ from (select e.sid as sid,
 __EOF__
 done
 	tput rc; tput clear
+
