@@ -185,7 +185,7 @@ progress_bar() {
 #
 ###############################################################
 # oracle_print_stats		- output all stats in database or all stats in database within stat class inputed by parameter
-# oracle_find_stat		- find stat name in database which name like 
+# oracle_find_stat		- find stat name in database which name like inputed parameter
 # oracle_stats_name		- find stat name by ID	
 # oracle_export_stats_data	- export stats data from oracle database to temp file	
 
