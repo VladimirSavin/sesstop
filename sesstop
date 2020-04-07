@@ -160,13 +160,16 @@ data_purge() {
 		then
 			rm -f ${SQLITE_DB}
 			[ -d "$TMP_DIR" ] && rm -Rf ${TMP_DIR}
-		else
-			printf "%s\n" "You preferred to save sqlitedb, it'leaved intact as ${SQLITE_DB}"
 		fi
 	fi
 #	echo "Data purge"
 	stty ${original_tty_state}
 	tput reset
+        if [ "$NODELITEDB" -ne "0"  ]
+	then
+		printf "%s\n" "You preferred to save sqlitedb, it's leaved intact as ${SQLITE_DB}"
+		printf "%s\n" "Thank you for using this script, good luck in research;"
+	fi
 	exit 0
 }
 
@@ -176,7 +179,7 @@ progress_bar() {
         do
                 for s in / - \\ \|
                 do
-                        printf "\r$s"
+                        printf "\r%s %d" "$s" "$wait_time"
                         sleep 1
                         ((wait_time++))
                         if [ $wait_time -eq $DELAY ]
@@ -345,6 +348,51 @@ delete from sesstop where timestamp not in (${begin_timestamp}, ${end_timestamp}
 __EOF__
 }
 
+sqlite_get_total() {
+        local begin_timestamp="$1"
+        local end_timestamp="$2"
+	local v_y
+        "$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
+select sum(end_value-begin_value) as total
+from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0;
+__EOF__
+        v_y=""
+        v_y=$(cat "$TMP_FILE")
+	printf -v "$3" %s "$v_y"
+}
+
+sqlite_get_delta() {
+        local begin_timestamp="$1"
+        local end_timestamp="$2"
+        local v_x="$3"
+                "$SQLITE" "$SQLITE_DB" << __EOF__
+.header on
+.mode column
+select sid||','||serial as sessid,
+       username, program, sql_id,
+       cast(end_value-begin_value as integer) as delta,
+       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
+from (select e.sid as sid,
+             e.serial as serial,
+             e.username as username,
+             e.program as program,
+             e.sql_id as sql_id,
+             cast(e.statvalue as float) as end_value,
+             cast( ifnull(b.statvalue,0) as float) as begin_value
+      from (select * from sesstop where timestamp=${end_timestamp}) e
+           left join
+           (select * from sesstop where timestamp=${begin_timestamp}) b
+           on ( b.sid=e.sid and b.serial=e.serial ) )
+      where (end_value-begin_value)>0
+      order by delta desc limit ${TOP_SIZE};
+__EOF__
+}
+
 ###############################################################
 #
  #		SQLITE functions END
@@ -499,8 +547,6 @@ progress_bar
 
 while true
 	do
-#	tput cup $LINES 0
-#	printf "%s" "q - quit; ? - help;"
 
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
@@ -522,17 +568,8 @@ while true
 		"?") show_help ;;
 	esac
 	tput clear
-	"$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
-select sum(end_value-begin_value) as total
-from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
-      from (select * from sesstop where timestamp=${end_timestamp}) e
-           left join
-           (select * from sesstop where timestamp=${begin_timestamp}) b
-           on ( b.sid=e.sid and b.serial=e.serial ) )
-      where (end_value-begin_value)>0;
-__EOF__
 	v_x=""
-	v_x=$(cat "$TMP_FILE")
+	sqlite_get_total "$begin_timestamp" "$end_timestamp" v_x
 	[ -z "$v_x" ] && v_x="1"
 	[ "$v_x" -eq "0" ] && v_x="1"
 
@@ -541,27 +578,6 @@ __EOF__
 		tput rmul; tput rc
 
 		tput sc; tput cup 5 5 ;
-		"$SQLITE" "$SQLITE_DB" << __EOF__
-.header on
-.mode column
-select sid||','||serial as sessid,
-       username, program, sql_id,
-       cast(end_value-begin_value as integer) as delta,
-       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
-from (select e.sid as sid,
-             e.serial as serial,
-             e.username as username,
-             e.program as program,
-             e.sql_id as sql_id,
-             cast(e.statvalue as float) as end_value,
-             cast( ifnull(b.statvalue,0) as float) as begin_value
-      from (select * from sesstop where timestamp=${end_timestamp}) e
-           left join
-           (select * from sesstop where timestamp=${begin_timestamp}) b
-           on ( b.sid=e.sid and b.serial=e.serial ) )
-      where (end_value-begin_value)>0
-      order by delta desc limit ${TOP_SIZE};
-__EOF__
+		sqlite_get_delta "$begin_timestamp" "$end_timestamp" "$v_x"
 done
 	tput rc; tput clear
-
