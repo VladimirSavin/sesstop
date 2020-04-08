@@ -3,26 +3,25 @@ This script provides dynamic report about top-N sql-sessions, in sense of one, s
 This script is intended to be used with oracle-database.
 It's cli-utility, bash script, which works like top-utility, but with data about oracle sql-session;
 ```
+Usage:
 sesstop [options]
 Options:
- -l	--list	[class]		show list of statistics in class
- -f	--find  [name]		find statistic with name
- -i	--id	<stat id>	  run top on stat id number with default parameters (10 elements and 20 seconds delay)
- -d --delay [number]  delay information update delay [default 20 sec]
- -t --top-size			  display number of top elements [default 10]
- -h     --help        display this help and exit
+ -l     --list  [class]         show list of statistics in class
+ -f     --find  [name]          find statistic with name
+ -i     --id    <stat id>       run top on stat id number with default parameters (10 elements and 20 seconds delay)
+ -d     --delay [number]        delay information update delay [default 20 sec]
+ -t     --top-size              display number of top elements [default 10]
+ -h     --help                  display this help and exit
  -n     --nodeletedb            Do not delete sqlitedb after script ending; By default: it'll be erased;
- ```
-```
-Statistics classes:	
-1. User	
-2. Redo	
-3. Enqueue	
-4. Cache	
-5. OS	
-6. Real Application Clusters	
-7. SQL	
-8. Debug
+Statistics classes:
+        1. User
+        2. Redo
+        3. Enqueue
+        4. Cache
+        5. OS
+        6. Real Application Clusters
+        7. SQL
+        8. Debug
 ```
 
 As a prerequirements: sqlite should be installed and be available.
