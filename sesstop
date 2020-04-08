@@ -55,7 +55,7 @@ SCREEN_SIZE_LINES=$((`tput lines` - 1))
 original_tty_state=$(stty -g)
 # To delete (0) or not to delete (1) sqlitedb at exit; 
 # it may be necessary to retain datbase, for example - for some analysis later in time;
-NODELITEDB="0"
+NODELETEDB="0"
 # === ===
 
 ###############################################################
@@ -71,6 +71,10 @@ NODELITEDB="0"
 ###############################################################
 # echo_usage	- output script help
 # echo_error	- output error messages
+# echo_warn	- output warning messages
+# echo_info	- output info messages
+# echo_debug	- output debug messages
+# echo_okay	- output normal messages
 echo_usage() {
 	printf "%s\n" "Usage:
 `basename $0` [options]
@@ -108,6 +112,31 @@ echo_error() {
 #                printf "%s\n" "${str}" >> $LOG
 #        fi
 }
+echo_warn()  {
+        local exe_name=${EXE_NAME:-$0}
+        local str="WARNING ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
+
+	printf "%b" "${YELLOW}${str}${OFF}\n" >&2
+}
+echo_info()  {
+        local exe_name=${EXE_NAME:-$0}
+        local str="   INFO ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
+
+	printf "%b" "${BLUE}${str}${OFF}\n" >&2
+}
+echo_debug() {
+        local exe_name=${EXE_NAME:-$0}
+        local str="  DEBUG ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
+
+	printf "%b" "${CYAN}${str}${OFF}\n" >&2
+}
+echo_okay() {
+        local exe_name=${EXE_NAME:-$0}
+        local str="        ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
+
+	printf "%b" "${GREEN}${str}${OFF}\n"; >&2
+}
+
 ################################################################
 #
  #		Output functions END
@@ -156,7 +185,7 @@ data_purge() {
 	[ -f "$TMP_FILE" ] && rm -f ${TMP_FILE}
 	if [ -f "$SQLITE_DB" ] 
 	then
-		if [ "$NODELITEDB" -eq "0"  ] 
+		if [ "$NODELETEDB" -eq "0"  ] 
 		then
 			rm -f ${SQLITE_DB}
 			[ -d "$TMP_DIR" ] && rm -Rf ${TMP_DIR}
@@ -165,7 +194,7 @@ data_purge() {
 #	echo "Data purge"
 	stty ${original_tty_state}
 	tput reset
-        if [ "$NODELITEDB" -ne "0"  ]
+        if [ "$NODELETEDB" -ne "0"  ]
 	then
 		printf "%s\n" "You preferred to save sqlitedb, it's leaved intact as ${SQLITE_DB}"
 		printf "%s\n" "Thank you for using this script, good luck in research;"
@@ -179,7 +208,8 @@ progress_bar() {
         do
                 for s in / - \\ \|
                 do
-                        printf "\r%s %d" "$s" "$wait_time"
+        #                printf "\r%s %d" "$s" "$wait_time"
+			printf "\r%s" "$s"
                         sleep 1
                         ((wait_time++))
                         if [ $wait_time -eq $DELAY ]
@@ -310,7 +340,7 @@ create table if not exists sesstop (timestamp integer, sid integer, serial integ
 .exit
 __EOF__
 
-if [ "$NODELITEDB" -ne "0"  ]
+if [ "$NODELETEDB" -ne "0"  ]
 then
 "$SQLITE" "$SQLITE_DB" << __EOF__
 create index if not exists timestamp_idx on sesstop(timestamp);
@@ -480,20 +510,20 @@ do
 		"-i"|"--id")
 			if [ -z $2 ]
 			then
-				printf "%s\n" "You did not choose on statistic ID."
+				echo_error "You did not choose on statistic ID."
 				exit 1
 			fi
 			ID=$2
-			printf "%s\n" " You want to see top on statistic #${ID}."
+			#printf "%s\n" " You want to see top on statistic #${ID}."
 			shift 2
 		;;
 		"-d"|"--delay")
 			if  [[ ! "$2" =~ ^- ]] && [[ ! -z "$2" ]]
 			then
 				DELAY=$2
-				printf "%s\n" "DELAY is set to ${DELAY} second[s]."
+			#	printf "%s\n" "DELAY is set to ${DELAY} second[s]."
 			else
-				printf "%s\n" "You did not choose on DELAY."
+				echo_error "You did not set DELAY."
 				exit 1
 			fi
 			shift 2
@@ -501,16 +531,16 @@ do
 		"-t"|"--top_size")
 			if [ -z $2 ]
 			then
-				printf "%s\n" "You did not choose on TOP_SIZE."
+				echo_error "You did not choose on TOP_SIZE."
 				exit 1
 			fi
 			TOP_SIZE=$2
-			printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."
+			#printf "%s\n" "TOP_SIZE is set to ${TOP_SIZE}."
 			shift 2
 		;;
 		"-n"|"--nodeletedb")
-			NODELITEDB="1"
-			printf "%s\n" "SqliteDB will be retained after exit, as ${SQLITE_DB}"
+			NODELETEDB="1"
+			#printf "%s\n" "SqliteDB will be retained after exit, as ${SQLITE_DB}"
 			shift 1
 		;;
 		*) echo "$1 is not an option"
@@ -546,17 +576,16 @@ progress_bar
 # === ===
 
 while true
-	do
-
+do
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
 	end_timestamp=${v_timestamp}
 	oracle_export_stats_data "$end_timestamp"
 	sqlite_import_data
 	sqlite_validate_import
-	if [ "$NODELITEDB" -eq "0" ]
+	if [ "$NODELETEDB" -eq "0" ]
 	then
-		#So, as NODELITEDB=0 - it means sqlitedb will'be deleted as script exit;
+		#So, as NODELETEDB=0 - it means sqlitedb will'be deleted as script exit;
 		#So it's not necssary to accumulate data in there 
 		#and and, in sake resource saving, unnecessary samples of data: will be deleted right now;
 		sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
@@ -573,11 +602,12 @@ while true
 	[ -z "$v_x" ] && v_x="1"
 	[ "$v_x" -eq "0" ] && v_x="1"
 
-		tput sc; tput cup 1 5 ;
-		tput smul; oracle_stats_name; tput rmul; date; hostname -f
-		tput rmul; tput rc
+	tput sc; tput cup 1 5 ;
+	tput smul; oracle_stats_name; tput rmul; date; hostname -f
+	tput rmul; tput rc
 
-		tput sc; tput cup 5 5 ;
-		sqlite_get_delta "$begin_timestamp" "$end_timestamp" "$v_x"
+	tput sc; tput cup 5 5 ;
+	sqlite_get_delta "$begin_timestamp" "$end_timestamp" "$v_x"
 done
-	tput rc; tput clear
+tput rc; tput clear
+
