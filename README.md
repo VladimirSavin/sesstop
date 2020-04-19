@@ -68,4 +68,5 @@ Options:
  -n     --nodeletedb            Do not delete sqlitedb after script ending; By default: it'll be erased;
 ```
 example:
+
 ![screen](event_hist.png)
