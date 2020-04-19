@@ -52,8 +52,8 @@ Thanks for the mentoring and support Maksim Ivanov and Denis Vodopyanov.
 # event_hist.sh
 This script provides dynamic report about disrtibution of duration of cases of given event;
 It uses sys.v_$event_histogram as data-source; 
-It pulls data about event which you set, from there, waits for setted period of time and pulls new data about the same event again, from the oracle-view;
-Then it find out delta-values, between those two samples of data and shows it;
+It pulls data about event, which you set, from there, waits for setted period of time and pulls new data about the same event again, from the oracle-view;
+Then it finds out delta-values, between those two samples of data and shows it;
 So you're able to see: how many cases of setted event happened and distribution of duration of those cases;
 ```
 Usage:
