@@ -48,3 +48,24 @@ Script's concept and sql-queries was offered by Maksim Ivanov ([MaksimIvanovPerm
 Some code and parameters options processing was developed by Denis Vodopyanov ([dvodop](https://github.com/dvodop) )
 
 Thanks for the mentoring and support Maksim Ivanov and Denis Vodopyanov.
+
+#event_hist.sh
+This script provides dynamic report about disrtibution of duration of cases of given event;
+It uses sys.v_$event_histogram as data-source; 
+It pulls data about event which you set, from there, waits for setted period of time and pulls new data about the same event again, from the oracle-view;
+Then it find out delta-values, between those two samples of data and shows it;
+So you're able to see: how many cases of setted event happened and distribution of duration of those cases;
+```
+Usage:
+event_hist.sh [options]
+Options:
+ -f     --find  [name]                  find id of interesting event;
+                                        Optionally you're able to set name, or part of name of event to find;
+ -i     --id    <event id>              run top on given event-id with default parameters (10 elements and 20 seconds delay)
+ -d     --delay [number]        delay information update delay [default 20 sec]
+ -t     --top-size              display number of top elements [default 10]
+ -h     --help                  display this help and exit
+ -n     --nodeletedb            Do not delete sqlitedb after script ending; By default: it'll be erased;
+```
+example:
+![screen](event_hist.png)
