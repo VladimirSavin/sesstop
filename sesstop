@@ -12,31 +12,14 @@
 #
 ###############################################################
 
-# === Output messages highlight ===
-if [ "$TERM" = "dumb" -o "$TERM" = "unknown" ] ; then
-        RED=""
-        GREEN=""
-        BROWN=""
-        BLUE=""
-        PURPLE=""
-        CYAN=""
-        WHITE=""
-        GRAY=""
-        YELLOW=""
-        OFF=""
+LIBRARY_FILE=`dirname $0`"/sesstop_lib.sh"
+if [ -f "$LIBRARY_FILE" ]
+then
+ . "$LIBRARY_FILE"
 else
-        RED="$(tput setaf 1 2>/dev/null)"
-        GREEN="$(tput setaf 2 2>/dev/null)"
-        BROWN="$(tput setaf 3 2>/dev/null)"
-        BLUE="$(tput setaf 4 2>/dev/null)"
-        PURPLE="$(tput setaf 5 2>/dev/null)"
-        CYAN="$(tput setaf 6 2>/dev/null)"
-        WHITE="$(tput setaf 7 2>/dev/null)"
-        GRAY="$(tput setaf 8 2>/dev/null)"
-        YELLOW="$(tput setaf 11 2>/dev/null)"
-        OFF="$(tput sgr0 2>/dev/null)"
+ echo "Library ${LIBRARY_FILE} was not found;"
+ exit 1
 fi
-# === ===
 
 # === Runtime configuration ===
 CONF_FILE="sesstop.conf"; [ -f "$CONF_FILE" ] && { source "$CONF_FILE"
@@ -44,6 +27,7 @@ echo "Configuration sourced from ${CONF_FILE}"
 cat "$CONF_FILE"
 }
 
+TABLE_NAME="sesstop"
 TMP_DIR=${TMP_DIR:-"/tmp/sesstat_$$"}
 TMP_FILE=${TMP_DIR}"/temp.dat"
 SQLITE=${SQLITE:-"/usr/bin/sqlite3"}
@@ -70,11 +54,6 @@ NODELETEDB="0"
 #
 ###############################################################
 # echo_usage	- output script help
-# echo_error	- output error messages
-# echo_warn	- output warning messages
-# echo_info	- output info messages
-# echo_debug	- output debug messages
-# echo_okay	- output normal messages
 echo_usage() {
 	printf "%s\n" "Usage:
 `basename $0` [options]
@@ -97,339 +76,7 @@ Statistics classes:
 	8. Debug
 "
 }
-
-echo_error() {
-        local exe_name=${EXE_NAME:-$0}
-        local str="  ERROR ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
-
-#        if [ $LOG_LEVEL -le 4 ]
-#        then
-                printf "%b" "${RED}${str}${OFF}\n" >&2
-#                printf "%s\n" "${str}" >> $LOG
-#        fi
-#        if [ $LOG_LEVEL -eq 5 ]
-#        then
-#                printf "%s\n" "${str}" >> $LOG
-#        fi
-}
-echo_warn()  {
-        local exe_name=${EXE_NAME:-$0}
-        local str="WARNING ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
-
-	printf "%b" "${YELLOW}${str}${OFF}\n" >&2
-}
-echo_info()  {
-        local exe_name=${EXE_NAME:-$0}
-        local str="   INFO ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
-
-	printf "%b" "${BLUE}${str}${OFF}\n" >&2
-}
-echo_debug() {
-        local exe_name=${EXE_NAME:-$0}
-        local str="  DEBUG ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
-
-	printf "%b" "${CYAN}${str}${OFF}\n" >&2
-}
-echo_okay() {
-        local exe_name=${EXE_NAME:-$0}
-        local str="        ${exe_name} `date '+%y.%m.%d %H:%M:%S'`: $@"
-
-	printf "%b" "${GREEN}${str}${OFF}\n"; >&2
-}
-
-################################################################
-#
- #		Output functions END
-#
-################################################################
-################################################################
-#
- #		Supplementary functions BEGIN
-#
-################################################################
-# check_dirs	- check existance of TMP_DIR and create it if needed
-# check_sqlite	- check existance and executable of SQLITE binary
-# check_command - check result of command and exit on error
-# data_purge	- remove sqlite datafile, tempfile and exit
-check_dirs () {
-	if [ ! -w "${TMP_DIR}" ]
-	then
-		mkdir -p "${TMP_DIR}"
-		check_command $? "Couldn't create temp dir [${TMP_DIR}]"
-	fi
-}
-
-check_sqlite(){
-	if [ ! -x "$SQLITE" ]
-	then
-		echo_error "$SQLITE not found or did not execute";
-		exit 1;
-	fi
-}
-
-check_command() {
-        local exe_name=${EXE_NAME:-$0}
-        local cmd_result
-        local message
-        cmd_result=$?
-        shift
-        message=$@
-        if [ ${cmd_result} -ne 0 ]
-        then
-                echo_error "$message"
-                exit ${cmd_result}
-        fi
-}
-
-data_purge() {
-	[ -f "$TMP_FILE" ] && rm -f ${TMP_FILE}
-	if [ -f "$SQLITE_DB" ] 
-	then
-		if [ "$NODELETEDB" -eq "0"  ] 
-		then
-			rm -f ${SQLITE_DB}
-			[ -d "$TMP_DIR" ] && rm -Rf ${TMP_DIR}
-		fi
-	fi
-#	echo "Data purge"
-	stty ${original_tty_state}
-	tput reset
-        if [ "$NODELETEDB" -ne "0"  ]
-	then
-		printf "%s\n" "You preferred to save sqlitedb, it's leaved intact as ${SQLITE_DB}"
-		printf "%s\n" "Thank you for using this script, good luck in research;"
-	fi
-	exit 0
-}
-
-progress_bar() {
-        wait_time=0
-        while [ $wait_time -lt $DELAY ]
-        do
-                for s in / - \\ \|
-                do
-        #                printf "\r%s %d" "$s" "$wait_time"
-			printf "\r%s" "$s"
-                        sleep 1
-                        ((wait_time++))
-                        if [ $wait_time -eq $DELAY ]
-                        then
-                                break
-                        fi
-                done
-        done
-}
-###############################################################
-#
- #		Supplementary functions END
-#
-###############################################################
-###############################################################
-#
- #		Oracle functions BEGIN
-#
-###############################################################
-# oracle_print_stats		- output all stats in database or all stats in database within stat class inputed by parameter
-# oracle_find_stat		- find stat name in database which name like inputed parameter
-# oracle_stats_name		- find stat name by ID
-# oracle_export_stats_data	- export stats data from oracle database to temp file
-
-oracle_print_stats() {
-	if [ -z $CLASS ]
-	then
-		query="select statistic#, name from sys.v_\$statname;"
-	else
-		query="select statistic#, name from sys.v_\$statname where class=$CLASS;"
-	fi
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
-set echo off
-set head off
-set feedback off
-set linesize 180
-set pagesize 0
-column name format a70
-$query
-exit;
-EoOS
-}
-
-oracle_find_stat() {
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
-set echo off
-set head off
-set feedback off
-set linesize 180
-set pagesize 0
-column name format a70
-select statistic#, name from sys.v_\$statname where lower(name) like lower('%${STAT_NAME}%');
-exit;
-EoOS
-}
-
-oracle_stats_name() {
-	$ORACLE_HOME/bin/sqlplus -S '/ as sysdba' << EoOS
-set echo off
-set head off
-set feedback off
-set linesize 180
-set pagesize 0
-column name format a70
-select statistic#, name from sys.v_\$statname where statistic#=${ID} ;
-exit;
-EoOS
-}
-
-oracle_export_stats_data(){
-	local v_timestamp="$1"
-	if [ -n "${ID}" ]
-	then
-		$ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
-whenever sqlerror exit failure
-set head off
-set feedback off
-set newp none
-set pagesize 0
-set linesize 1024
-select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
-from v\$sesstat st, v\$statname sn, v\$session s
-where st.STATISTIC#=sn.STATISTIC#
-  and sn.STATISTIC#='${ID}'
-  and st.value is not null
-  and st.value>0
-  and s.sid=st.sid;
-exit
-__EOF__
-	else
-	        $ORACLE_HOME/bin/sqlplus -S / as sysdba << __EOF__ > "$TMP_FILE"
-whenever sqlerror exit failure
-set head off
-set feedback off
-set newp none
-set pagesize 0
-set linesize 1024
-select ${v_timestamp}||';'||st.sid||';'||s.serial#||';'||s.username||';'||s.program||';'||s.sql_id||';'||st.value
-from v\$sesstat st, v\$statname sn, v\$session s
-where st.STATISTIC#=sn.STATISTIC#
-  and st.value is not null
-  and st.value>0
-  and s.sid=st.sid;
-exit
-__EOF__
-	fi
-}
-###############################################################
-#
- #		Oracle functions END
-#
-###############################################################
-###############################################################
-#
- #		SQLITE functions BEGIN
-#
-###############################################################
-# sqlite_create_table		- just create empty table for statistics data
-# sqlite_sqlite_table		- just drop table in sqlite database
-# sqlite_import_data		- Import data from ${TMP_FILE} to sqlite db ${SQLITE_DB}
-# sqlite_validate_import	- Validate import from ${TMP_FILE} to sqlite db ${SQLITE_DB}.
-
-sqlite_create_table() {
-	"$SQLITE" "$SQLITE_DB" << __EOF__
-drop table if exists sesstop;
---create table sesstop (timestamp integer, sid integer, statvalue integer, statname varchar(50));
-create table if not exists sesstop (timestamp integer, sid integer, serial integer, username text, program text, sql_id text, statvalue integer);
-.exit
-__EOF__
-
-if [ "$NODELETEDB" -ne "0"  ]
-then
-"$SQLITE" "$SQLITE_DB" << __EOF__
-create index if not exists timestamp_idx on sesstop(timestamp);
-__EOF__
-fi
-
-}
-
-sqlite_import_data() {
-	"$SQLITE" "$SQLITE_DB" << __EOF__
-.separator ;
-.mode list
-.import ${TMP_FILE} sesstop
-.exit
-__EOF__
-}
-
-sqlite_validate_import() {
-	v_x=`"$SQLITE" "$SQLITE_DB" "select count(*) from sesstop where timestamp=${v_timestamp};"`
-	v_y=`wc -l ${TMP_FILE} | cut -d' ' -f1`
-	if [ ${v_x} -ne ${v_y} ]
-	then
-		echo_error "Import validation error"
-		exit 1
-	fi
-}
-
-sqlite_delete_old_samples() {
-	local begin_timestamp="$1"
-	local end_timestamp="$2"
-	"$SQLITE" "$SQLITE_DB" << __EOF__
---delete from sesstop where timestamp not in (select distinct timestamp from sesstop order by 1 desc limit 2);
-delete from sesstop where timestamp not in (${begin_timestamp}, ${end_timestamp});
-.exit
-__EOF__
-}
-
-sqlite_get_total() {
-        local begin_timestamp="$1"
-        local end_timestamp="$2"
-	local v_y
-        "$SQLITE" "$SQLITE_DB" << __EOF__ > "$TMP_FILE"
-select sum(end_value-begin_value) as total
-from (select ifnull(b.statvalue,0) as begin_value, e.statvalue as end_value
-      from (select * from sesstop where timestamp=${end_timestamp}) e
-           left join
-           (select * from sesstop where timestamp=${begin_timestamp}) b
-           on ( b.sid=e.sid and b.serial=e.serial ) )
-      where (end_value-begin_value)>0;
-__EOF__
-        v_y=""
-        v_y=$(cat "$TMP_FILE")
-	printf -v "$3" %s "$v_y"
-}
-
-sqlite_get_delta() {
-        local begin_timestamp="$1"
-        local end_timestamp="$2"
-        local v_x="$3"
-                "$SQLITE" "$SQLITE_DB" << __EOF__
-.header on
-.mode column
-select sid||','||serial as sessid,
-       username, program, sql_id,
-       cast(end_value-begin_value as integer) as delta,
-       case when ((end_value-begin_value)/${v_x})*100 > 10 then round( 100*( (end_value-begin_value)/${v_x} ), 2) else null end as importance
-from (select e.sid as sid,
-             e.serial as serial,
-             e.username as username,
-             e.program as program,
-             e.sql_id as sql_id,
-             cast(e.statvalue as float) as end_value,
-             cast( ifnull(b.statvalue,0) as float) as begin_value
-      from (select * from sesstop where timestamp=${end_timestamp}) e
-           left join
-           (select * from sesstop where timestamp=${begin_timestamp}) b
-           on ( b.sid=e.sid and b.serial=e.serial ) )
-      where (end_value-begin_value)>0
-      order by delta desc limit ${TOP_SIZE};
-__EOF__
-}
-
-###############################################################
-#
- #		SQLITE functions END
-#
-###############################################################
-
-
+# === Main routine ======================================
 #if [ -z $1 ] #Запуск без параметров выводит echo_usage
 #then
 #	echo_usage
@@ -569,45 +216,55 @@ begin_timestamp=${end_timestamp:-0}
 end_timestamp=${v_timestamp}
 # echo "$begin_timestamp $end_timestamp"
 oracle_export_stats_data "$end_timestamp"
-sqlite_import_data
+sqlite_import_data "$TABLE_NAME"
 sqlite_validate_import
 
 progress_bar
 # === ===
 
+v_stat_name=$(oracle_stats_name)
+v_hostname=$(hostname -f)
+v_count="1"
 while true
 do
 	v_timestamp=`date +%s`
 	begin_timestamp=${end_timestamp:-0}
 	end_timestamp=${v_timestamp}
 	oracle_export_stats_data "$end_timestamp"
-	sqlite_import_data
+	sqlite_import_data "$TABLE_NAME"
 	sqlite_validate_import
 	if [ "$NODELETEDB" -eq "0" ]
 	then
 		#So, as NODELETEDB=0 - it means sqlitedb will'be deleted as script exit;
 		#So it's not necssary to accumulate data in there 
 		#and and, in sake resource saving, unnecessary samples of data: will be deleted right now;
-		sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp"
+		sqlite_delete_old_samples "$begin_timestamp" "$end_timestamp" "$TABLE_NAME"
 	fi
 
-	read -s -t $DELAY -n 1 input_char
-	case "${input_char}" in
-		"q") data_purge ;;
-		"?") show_help ;;
-	esac
 	tput clear
 	v_x=""
 	sqlite_get_total "$begin_timestamp" "$end_timestamp" v_x
 	[ -z "$v_x" ] && v_x="1"
 	[ "$v_x" -eq "0" ] && v_x="1"
 
-	tput sc; tput cup 1 5 ;
-	tput smul; oracle_stats_name; tput rmul; date; hostname -f
-	tput rmul; tput rc
+	tput sc; tput cup 0 0 ;
+	echo -n "Statistics name: "; tput smul; echo "$v_stat_name"; tput rmul; 
+	echo -n "Datetime: `date`; "; tput smul; echo -n "${v_hostname}"; tput rmul; echo " sample#: ${v_count}; delay: ${DELAY}; top_size: ${TOP_SIZE}"
+        if [ "$NODELETEDB" -ne "0" ]
+        then
+                echo -n "sqlite file: "; tput smul; echo -n "$SQLITE_DB"; tput rmul;
+        fi
+	tput rc
 
-	tput sc; tput cup 5 5 ;
+	tput sc; tput cup 4 0 ;
 	sqlite_get_delta "$begin_timestamp" "$end_timestamp" "$v_x"
+
+        read -s -t $DELAY -n 1 input_char
+        case "${input_char}" in
+                "q") data_purge ;;
+                "?") show_help ;;
+        esac
+	((v_count++))
 done
 tput rc; tput clear
 
