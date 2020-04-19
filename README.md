@@ -49,7 +49,7 @@ Some code and parameters options processing was developed by Denis Vodopyanov ([
 
 Thanks for the mentoring and support Maksim Ivanov and Denis Vodopyanov.
 
-#event_hist.sh
+# event_hist.sh
 This script provides dynamic report about disrtibution of duration of cases of given event;
 It uses sys.v_$event_histogram as data-source; 
 It pulls data about event which you set, from there, waits for setted period of time and pulls new data about the same event again, from the oracle-view;
